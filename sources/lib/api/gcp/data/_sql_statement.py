@@ -169,7 +169,17 @@ class SqlStatement(object):
       elif literal:
         parts.append(literal)
 
-    return ''.join(parts), code
+    expanded = ''.join(parts)
+    functions = re.findall(r'FROM\s+(\w+)\s*\(', expanded, re.IGNORECASE)
+    for function in functions:
+      if re.match(r'TABLE_DATE_RANGE|TABLE_DATE_RANGE_STRICT|TABLE_QUERY', function, re.IGNORECASE):
+        continue
+      value = gcp._util.get_item(args, function)
+      if value and '_repr_code_' in dir(value):
+        code.append(value._repr_code_())
+      else:
+        raise Exception('Invalid sql. Unknown function %s' % function)
+    return expanded, code
 
   @staticmethod
   def _get_tokens(sql):

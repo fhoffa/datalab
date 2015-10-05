@@ -134,5 +134,8 @@ class UDF(object):
     else:
       return FunctionCall(data, self._inputs, self._outputs, self._name, self._implementation)
 
+  def _repr_code_(self):
+    return FunctionCall._build_js(self._inputs, self._outputs, self._name, self._implementation)
+
   def __repr_js__(self):
     return self._implementation
