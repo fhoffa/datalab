@@ -112,7 +112,7 @@ class SqlStatement(object):
         resolved_vars[dependency] = dep
 
   @staticmethod
-  def format(sql, args=None):
+  def format(sql, args=None, udfs=None):
     """ Resolve variable references in a query within an environment.
 
     This computes and resolves the transitive dependencies in the query and raises an
@@ -121,6 +121,7 @@ class SqlStatement(object):
     Args:
       sql: query to format.
       args: a dictionary of values to use in variable expansion.
+      udfs: a list of UDFs referenced in the query.
 
     Returns:
       The resolved SQL text, and an array of any referenced UDFs.
@@ -171,13 +172,19 @@ class SqlStatement(object):
 
     expanded = ''.join(parts)
     functions = re.findall(r'FROM\s+(\w+)\s*\(', expanded, re.IGNORECASE)
+    if udfs is None:
+      udfs = []
     for function in functions:
       if re.match(r'TABLE_DATE_RANGE|TABLE_DATE_RANGE_STRICT|TABLE_QUERY', function, re.IGNORECASE):
         continue
-      value = gcp._util.get_item(args, function)
-      if value and '_repr_code_' in dir(value):
-        code.append(value._repr_code_())
-      else:
+      # This is a little kludgy as gcp.data has no dependency on gcp.bigquery and so UDF class is
+      # not visible here.
+      for udf in udfs:
+        if 'name' in dir(udf) and udf.name == function and '_repr_code_' in dir(udf):
+          code.append(udf._repr_code_())
+          function = None
+          break
+      if function:
         raise Exception('Invalid sql. Unknown function %s' % function)
     return expanded, code
 

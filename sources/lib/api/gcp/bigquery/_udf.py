@@ -112,6 +112,10 @@ class UDF(object):
   """Represents a BigQuery UDF declaration.
   """
 
+  @property
+  def name(self):
+    return self._name
+
   def __init__(self, inputs, outputs, name, implementation):
     """Initializes a Function object from its pieces.
 

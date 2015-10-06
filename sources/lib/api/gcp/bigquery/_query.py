@@ -16,6 +16,7 @@ import gcp._util
 import gcp.data
 import _api
 import _sampling
+import _udf
 import _utils
 
 
@@ -41,7 +42,7 @@ class Query(object):
     """
     return Query(_sampling.Sampling.sampling_query(sql, fields, count, sampling), context=context)
 
-  def __init__(self, sql, scripts=None, context=None, values=None, **kwargs):
+  def __init__(self, sql, context=None, values=None, udfs=None, **kwargs):
     """Initializes an instance of a Query object.
 
     Args:
@@ -52,7 +53,7 @@ class Query(object):
           It is possible to have variable references in a query string too provided the variables
           are passed as keyword arguments to this constructor.
 
-      scripts: array of UDFs referenced in the SQL.
+      udfs: array of UDFs referenced in the SQL.
       context: an optional Context object providing project_id and credentials. If a specific
           project id or credentials are unspecified, the default ones configured at the global
           level are used.
@@ -66,22 +67,24 @@ class Query(object):
     Raises:
       Exception if expansion of any variables failed.
       """
-    if kwargs or values or not isinstance(sql, basestring):
-      if values is None:
-        values = kwargs
-      sql, code = gcp.data.SqlModule.expand(sql, values)
-      if code:
-        if scripts is None:
-          scripts = code
-        else:
-          scripts.extend(code)
-
     if context is None:
       context = gcp.Context.default()
     self._context = context
     self._api = _api.Api(context)
-    self._sql = sql
-    self._scripts = scripts
+
+    self._scripts = None
+    if kwargs or udfs or values or not isinstance(sql, basestring):
+      if values is None:
+        values = kwargs
+      if udfs is None:
+        udfs = []
+      # Values dict can come from overrides in cell magic config bodies. If user
+      # specified UDFs there we need to add them to the UDF list.
+      udfs.extend([value for value in values.values() if isinstance(value, _udf.UDF)])
+      self._sql, self._scripts = gcp.data.SqlModule.expand(sql, values, udfs)
+    else:
+      self._sql = sql
+
     self._results = None
 
   def _repr_sql_(self):
