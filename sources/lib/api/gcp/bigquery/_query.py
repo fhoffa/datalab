@@ -83,6 +83,7 @@ class Query(object):
       # Values dict can come from overrides in cell magic config bodies. If user
       # specified UDFs there we need to add them to the UDF list.
       udfs.extend([value for value in values.values() if isinstance(value, _udf.UDF)])
+      udfs.extend([value.udf for value in values.values() if isinstance(value, _udf.FunctionCall)])
       self._sql = gcp.data.SqlModule.expand(sql, values, udfs)
       functions = re.findall(r'FROM\s+(\w+)\s*\(', self._sql, re.IGNORECASE)
       for function in functions:

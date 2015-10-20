@@ -19,18 +19,31 @@ class FunctionCall(object):
   """Represents a BigQuery UDF invocation.
   """
 
-  def __init__(self, data, inputs, outputs, name, implementation):
+  @staticmethod
+  def _build_sql(name, outputs, data):
+    """Creates a BigQuery SQL UDF query invocation object.
+
+    Args:
+      name: the name of the UDF function
+      outputs: a list of (name, type) tuples representing the schema of output.
+      data: the query or table over which the UDF operates.
+    """
+    return '(SELECT %s FROM %s(%s))' % (', '.join([f[0] for f in outputs]), name, data._repr_sql_())
+
+  def __init__(self, udf, data):
     """Initializes a UDF object from its pieces.
 
     Args:
+      udf: the UDF being called.
       data: the query or table over which the UDF operates.
-      inputs: a list of string field names representing the schema of input.
-      outputs: a list of name/type tuples representing the schema of the output.
-      name: the name of the UDF function
-      implementation: a javascript function implementing the logic.
     """
-    self._sql = FunctionCall._build_sql(name, inputs, data)
-    self._code = FunctionCall._build_js(inputs, outputs, name, implementation)
+    self._udf = udf
+    self._sql = FunctionCall._build_sql(udf.name, udf._outputs, data)
+
+  @property
+  def udf(self):
+    """ Gets the UDF for this call. """
+    return self._udf
 
   @property
   def sql(self):
@@ -40,7 +53,7 @@ class FunctionCall(object):
   @property
   def js(self):
     """Gets the underlying JS representation of this UDF object."""
-    return self._code
+    return self._repr_code_()
 
   def _repr_sql_(self):
     """Returns a SQL representation of the UDF object.
@@ -56,41 +69,7 @@ class FunctionCall(object):
     Returns:
       A JS string that can be submitted with a BQ Query.
     """
-    return self._code
-
-  @staticmethod
-  def _build_sql(name, inputs, data):
-    """Creates a BigQuery SQL UDF query invocation object.
-
-    Args:
-      name: the name of the UDF function
-      inputs: a list of (name, type) tuples representing the schema of input.
-      data: the query or table over which the UDF operates.
-    """
-    return '(SELECT %s FROM %s(%s))' % (', '.join([f[0] for f in inputs]), name, data._repr_sql_())
-
-  @staticmethod
-  def _build_js(inputs, outputs, name, implementation):
-    """Creates a BigQuery SQL UDF javascript object.
-
-    Args:
-      inputs: a list of (name, type) tuples representing the schema of input.
-      outputs: a list of (name, type) tuples representing the schema of the output.
-      name: the name of the function
-      implementation: a javascript function defining the UDF logic.
-    """
-    # Construct a comma-separated list of input field names
-    # For example, field1,field2,...
-    input_fields = json.dumps([f[0] for f in inputs])
-
-    # Construct a json representation of the output schema
-    # For example, [{'name':'field1','type':'string'},...]
-    output_fields = [{'name': f[0], 'type': f[1]} for f in outputs]
-    output_fields = json.dumps(output_fields, sort_keys=True)
-
-    # Build the JS from the individual bits with proper escaping of the implementation
-    return '%s=%s;\nbigquery.defineFunction(\'%s\', %s, %s, %s);' %\
-           (name, implementation.replace('"', '\\"'), name, input_fields, output_fields, name)
+    return self._udf._repr_code_()
 
 
 class FunctionEvaluation(object):
@@ -132,15 +111,39 @@ class UDF(object):
     self._name = name
     self._implementation = implementation
     self._imports = imports
+    self._code = UDF._build_js(self._inputs, self._outputs, self._name, self._implementation)
 
   def __call__(self, data):
     if issubclass(type(data), list):
       return FunctionEvaluation(self._implementation, data)
     else:
-      return FunctionCall(data, self._inputs, self._outputs, self._name, self._implementation)
+      return FunctionCall(self, data)
+
+  @staticmethod
+  def _build_js(inputs, outputs, name, implementation):
+    """Creates a BigQuery SQL UDF javascript object.
+
+    Args:
+      inputs: a list of (name, type) tuples representing the schema of input.
+      outputs: a list of (name, type) tuples representing the schema of the output.
+      name: the name of the function
+      implementation: a javascript function defining the UDF logic.
+    """
+    # Construct a comma-separated list of input field names
+    # For example, field1,field2,...
+    input_fields = json.dumps([f[0] for f in inputs])
+
+    # Construct a json representation of the output schema
+    # For example, [{'name':'field1','type':'string'},...]
+    output_fields = [{'name': f[0], 'type': f[1]} for f in outputs]
+    output_fields = json.dumps(output_fields, sort_keys=True)
+
+    # Build the JS from the individual bits with proper escaping of the implementation
+    return '%s=%s;\nbigquery.defineFunction(\'%s\', %s, %s, %s);' % \
+           (name, implementation.replace('"', '\\"'), name, input_fields, output_fields, name)
 
   def _repr_code_(self):
-    return FunctionCall._build_js(self._inputs, self._outputs, self._name, self._implementation)
+    return self._code
 
   def __repr_js__(self):
     return self._implementation
