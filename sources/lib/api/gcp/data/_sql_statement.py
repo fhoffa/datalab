@@ -152,12 +152,8 @@ class SqlStatement(object):
         if isinstance(value, types.ModuleType):
           value = _sql_module.SqlModule.get_default_query_from_module(value)
 
-        if '_repr_code_' in dir(value):
-          code.append(value._repr_code_())
-
         if isinstance(value, SqlStatement):
-          sql, udfs = value.format(value._sql, resolved_vars)
-          code.extend(udfs)
+          sql = value.format(value._sql, resolved_vars)
           value = '(%s)' % sql
         elif '_repr_sql_' in dir(value):
           # pylint: disable=protected-access
@@ -171,22 +167,7 @@ class SqlStatement(object):
         parts.append(literal)
 
     expanded = ''.join(parts)
-    functions = re.findall(r'FROM\s+(\w+)\s*\(', expanded, re.IGNORECASE)
-    if udfs is None:
-      udfs = []
-    for function in functions:
-      if re.match(r'TABLE_DATE_RANGE|TABLE_DATE_RANGE_STRICT|TABLE_QUERY', function, re.IGNORECASE):
-        continue
-      # This is a little kludgy as gcp.data has no dependency on gcp.bigquery and so UDF class is
-      # not visible here.
-      for udf in udfs:
-        if 'name' in dir(udf) and udf.name == function and '_repr_code_' in dir(udf):
-          code.append(udf._repr_code_())
-          function = None
-          break
-      if function:
-        raise Exception('Invalid sql. Unknown function %s' % function)
-    return expanded, code
+    return expanded
 
   @staticmethod
   def _get_tokens(sql):

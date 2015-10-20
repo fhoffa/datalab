@@ -27,8 +27,7 @@ def sql(sql_template, **kwargs):
     sql_template: the template of the SQL statement with named placeholders.
     **kwargs: the dictionary of name/value pairs to use for placeholder values.
   Returns:
-    The formatted SQL statement with placeholders replaced with their values, and
-    an array of Javascript UDFs referenced by the code.
+    The formatted SQL statement with placeholders replaced with their values.
   Raises:
     Exception if a placeholder was found in the SQL statement, but did not have
     a corresponding argument value.

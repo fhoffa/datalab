@@ -23,14 +23,14 @@ class TestCases(unittest.TestCase):
                ' SELECT time FROM [logs.today] ']
 
     for query in queries:
-      formatted_query = SqlStatement.format(query, None)[0]
+      formatted_query = SqlStatement.format(query, None)
       self.assertEqual(query, formatted_query)
 
   def test_single_placeholder(self):
     query = 'SELECT time FROM [logs.today] WHERE status == $param'
     args = {'param': 200}
 
-    formatted_query = SqlStatement.format(query, args)[0]
+    formatted_query = SqlStatement.format(query, args)
     self.assertEqual(formatted_query,
                      'SELECT time FROM [logs.today] WHERE status == 200')
 
@@ -39,7 +39,7 @@ class TestCases(unittest.TestCase):
              'WHERE status == $status AND path == $path')
     args = {'status': 200, 'path': '/home'}
 
-    formatted_query = SqlStatement.format(query, args)[0]
+    formatted_query = SqlStatement.format(query, args)
     self.assertEqual(formatted_query,
                      ('SELECT time FROM [logs.today] '
                       'WHERE status == 200 AND path == "/home"'))
@@ -48,7 +48,7 @@ class TestCases(unittest.TestCase):
     query = 'SELECT time FROM [logs.today] WHERE path == "/foo$$bar"'
     args = {'status': 200}
 
-    formatted_query = SqlStatement.format(query, args)[0]
+    formatted_query = SqlStatement.format(query, args)
     self.assertEqual(formatted_query,
                      'SELECT time FROM [logs.today] WHERE path == "/foo$bar"')
 
@@ -56,7 +56,7 @@ class TestCases(unittest.TestCase):
     query = 'SELECT time FROM [logs.today] WHERE path == $path'
     args = {'path': 'xyz"xyz'}
 
-    formatted_query = SqlStatement.format(query, args)[0]
+    formatted_query = SqlStatement.format(query, args)
     self.assertEqual(formatted_query,
                      'SELECT time FROM [logs.today] WHERE path == "xyz\\"xyz"')
 
@@ -76,7 +76,7 @@ class TestCases(unittest.TestCase):
                       'WHERE success == False AND server == "$master" '
                       'LIMIT 10')
 
-    formatted_query = SqlStatement.format(query, args)[0]
+    formatted_query = SqlStatement.format(query, args)
 
     self.assertEqual(formatted_query, expected_query)
 
@@ -85,7 +85,7 @@ class TestCases(unittest.TestCase):
     args = {'s': 200}
 
     with self.assertRaises(Exception) as error:
-      _ = SqlStatement.format(query, args)[0]
+      _ = SqlStatement.format(query, args)
 
     e = error.exception
     self.assertEqual(e.message, 'Unsatisfied dependency $status')
@@ -102,26 +102,26 @@ class TestCases(unittest.TestCase):
     self.assertEquals('Unsatisfied dependency $query2', e.exception.message)
 
     with self.assertRaises(Exception) as e:
-      _ = SqlStatement.format(query3, {'query1': query1})[0]
+      _ = SqlStatement.format(query3, {'query1': query1})
     self.assertEquals('Unsatisfied dependency $query2', e.exception.message)
 
     with self.assertRaises(Exception) as e:
-      _ = SqlStatement.format(query3, {'query2': query2})[0]
+      _ = SqlStatement.format(query3, {'query2': query2})
     self.assertEquals('Unsatisfied dependency $query1', e.exception.message)
 
     with self.assertRaises(Exception) as e:
-      _ = SqlStatement.format(query3, {'query1': query1, 'query2': query2})[0]
+      _ = SqlStatement.format(query3, {'query1': query1, 'query2': query2})
     self.assertEquals('Unsatisfied dependency $count', e.exception.message)
 
     formatted_query =\
-        SqlStatement.format(query3, {'query1': query1, 'query2': query2, 'count': 5})[0]
+        SqlStatement.format(query3, {'query1': query1, 'query2': query2, 'count': 5})
     self.assertEqual('SELECT * FROM (SELECT x FROM (SELECT 3 as x)) WHERE x == 5', formatted_query)
 
   def test_shared_nested_queries(self):
     query1 = SqlStatement('SELECT 3 as x')
     query2 = SqlStatement('SELECT x FROM $query1')
     query3 = 'SELECT x AS y FROM $query1, x FROM $query2'
-    formatted_query = SqlStatement.format(query3, {'query1': query1, 'query2': query2})[0]
+    formatted_query = SqlStatement.format(query3, {'query1': query1, 'query2': query2})
     self.assertEqual('SELECT x AS y FROM (SELECT 3 as x), x FROM (SELECT x FROM (SELECT 3 as x))',
                      formatted_query)
 
@@ -132,15 +132,15 @@ class TestCases(unittest.TestCase):
     args = {'query1': query1, 'query2': query2, 'query3': query3}
 
     with self.assertRaises(Exception) as e:
-      _ = SqlStatement.format('SELECT * FROM $query1', args)[0]
+      _ = SqlStatement.format('SELECT * FROM $query1', args)
     self.assertEquals('Circular dependency in $query1', e.exception.message)
 
     with self.assertRaises(Exception) as e:
-      _ = SqlStatement.format('SELECT * FROM $query2', args)[0]
+      _ = SqlStatement.format('SELECT * FROM $query2', args)
     self.assertEquals('Circular dependency in $query2', e.exception.message)
 
     with self.assertRaises(Exception) as e:
-      _ = SqlStatement.format('SELECT * FROM $query3', args)[0]
+      _ = SqlStatement.format('SELECT * FROM $query3', args)
     self.assertEquals('Circular dependency in $query3', e.exception.message)
 
   def test_module_reference(self):
@@ -149,13 +149,13 @@ class TestCases(unittest.TestCase):
     m.__dict__[SqlModule._SQL_MODULE_LAST] =\
         m.__dict__[SqlModule._SQL_MODULE_LAST] = SqlStatement('SELECT * FROM $q1 LIMIT 10')
     with self.assertRaises(Exception) as e:
-      _ = SqlStatement.format('SELECT * FROM $s', {'s': m})[0]
+      _ = SqlStatement.format('SELECT * FROM $s', {'s': m})
     self.assertEquals('Unsatisfied dependency $q1', e.exception.message)
 
-    formatted_query = SqlStatement.format('SELECT * FROM $s', {'s': m, 'q1': m.q1})[0]
+    formatted_query = SqlStatement.format('SELECT * FROM $s', {'s': m, 'q1': m.q1})
     self.assertEqual('SELECT * FROM (SELECT * FROM (SELECT 3 AS x) LIMIT 10)', formatted_query)
 
-    formatted_query = SqlStatement.format('SELECT * FROM $s', {'s': m.q1})[0]
+    formatted_query = SqlStatement.format('SELECT * FROM $s', {'s': m.q1})
     self.assertEqual('SELECT * FROM (SELECT 3 AS x)', formatted_query)
 
   def test_get_sql_statement_with_environment(self):

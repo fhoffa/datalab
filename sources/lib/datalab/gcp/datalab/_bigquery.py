@@ -355,8 +355,13 @@ def _udf_cell(args, js):
   for n, t in zip(output_spec_parts[0::2], output_spec_parts[1::2]):
     outputs.append((n, t))
 
+  # Look for imports. We use a non-standard @import keyword; we could alternatively use @requires.
+  # Object names can contain any characters except \r and \n.
+  import_pattern = r'@import[\w]+(gs://[a-z\d][a-z\d_\.\-]*[a-z\d]/[^\n\r]+)'
+  imports = re.findall(import_pattern, js)
+
   # Finally build the UDF object
-  udf = gcp.bigquery.UDF(inputs, outputs, variable_name, js)
+  udf = gcp.bigquery.UDF(inputs, outputs, variable_name, js, imports)
   _notebook_environment()[variable_name] = udf
 
 

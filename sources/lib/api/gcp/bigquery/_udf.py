@@ -116,7 +116,7 @@ class UDF(object):
   def name(self):
     return self._name
 
-  def __init__(self, inputs, outputs, name, implementation):
+  def __init__(self, inputs, outputs, name, implementation, imports=None):
     """Initializes a Function object from its pieces.
 
     Args:
@@ -131,6 +131,7 @@ class UDF(object):
     self._outputs = outputs
     self._name = name
     self._implementation = implementation
+    self._imports = imports
 
   def __call__(self, data):
     if issubclass(type(data), list):

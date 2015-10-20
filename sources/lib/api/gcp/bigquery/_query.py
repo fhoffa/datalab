@@ -12,6 +12,7 @@
 
 """Implements Query BigQuery API."""
 
+import re
 import gcp._util
 import gcp.data
 import _api
@@ -71,7 +72,8 @@ class Query(object):
       context = gcp.Context.default()
     self._context = context
     self._api = _api.Api(context)
-
+    self._sql = sql
+    self._results = None
     self._scripts = None
     if kwargs or udfs or values or not isinstance(sql, basestring):
       if values is None:
@@ -81,11 +83,22 @@ class Query(object):
       # Values dict can come from overrides in cell magic config bodies. If user
       # specified UDFs there we need to add them to the UDF list.
       udfs.extend([value for value in values.values() if isinstance(value, _udf.UDF)])
-      self._sql, self._scripts = gcp.data.SqlModule.expand(sql, values, udfs)
-    else:
-      self._sql = sql
-
-    self._results = None
+      self._sql = gcp.data.SqlModule.expand(sql, values, udfs)
+      functions = re.findall(r'FROM\s+(\w+)\s*\(', self._sql, re.IGNORECASE)
+      for function in functions:
+        if re.match(r'TABLE_DATE_RANGE|TABLE_DATE_RANGE_STRICT|TABLE_QUERY', function, re.IGNORECASE):
+          continue
+        # This is a little kludgy as gcp.data has no dependency on gcp.bigquery and so UDF class is
+        # not visible here.
+        for udf in udfs:
+          if 'name' in dir(udf) and udf.name == function and '_repr_code_' in dir(udf):
+            if self._scripts is None:
+              self._scripts = []
+            self._scripts.append(udf._repr_code_())
+            function = None
+            break
+        if function:
+          raise Exception('Invalid sql. Unknown function %s' % function)
 
   def _repr_sql_(self):
     """Creates a SQL representation of this object.
