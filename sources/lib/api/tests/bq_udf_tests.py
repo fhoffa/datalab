@@ -23,13 +23,13 @@ class TestCases(unittest.TestCase):
     table = gcp.bigquery.Table('test:requestlogs.today', context=context)
 
     udf = self._create_udf()
-    udf = udf(table)
+    call = udf(table)
 
-    expected_js = 'foo=function(r,emit) { emit({output1: r.field2, output2: r.field1 }); };\n' +\
+    expected_js = '\nfoo=function(r,emit) { emit({output1: r.field2, output2: r.field1 }); };\n' +\
                   'bigquery.defineFunction(\'foo\', ["field1", "field2"], ' +\
                   '[{"name": "output1", "type": "integer"}, ' +\
                   '{"name": "output2", "type": "string"}], foo);'
-    self.assertEqual(udf._repr_sql_(), '(SELECT output1, output2 FROM foo([test:requestlogs.today]))')
+    self.assertEqual(call._repr_sql_(), '(SELECT output1, output2 FROM foo([test:requestlogs.today]))')
     self.assertEqual(udf._repr_code_(), expected_js)
 
   def _create_udf(self):

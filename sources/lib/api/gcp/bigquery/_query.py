@@ -87,12 +87,8 @@ class Query(object):
       self._sql = gcp.data.SqlModule.expand(sql, values, udfs)
       functions = re.findall(r'FROM\s+(\w+)\s*\(', self._sql, re.IGNORECASE)
       for function in functions:
-        if re.match(r'TABLE_DATE_RANGE|TABLE_DATE_RANGE_STRICT|TABLE_QUERY', function, re.IGNORECASE):
-          continue
-        # This is a little kludgy as gcp.data has no dependency on gcp.bigquery and so UDF class is
-        # not visible here.
         for udf in udfs:
-          if 'name' in dir(udf) and udf.name == function and '_repr_code_' in dir(udf):
+          if udf.name == function:
             if self._scripts is None:
               self._scripts = []
             self._scripts.append(udf._repr_code_())

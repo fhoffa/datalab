@@ -360,8 +360,19 @@ def _udf_cell(args, js):
   import_pattern = r'@import[\w]+(gs://[a-z\d][a-z\d_\.\-]*[a-z\d]/[^\n\r]+)'
   imports = re.findall(import_pattern, js)
 
+  # Split the cell if necessary. We look for a 'function(' with no name and a header comment
+  # block with @param and assume this is the primary function. The remaining cell content is
+  # used as support code.
+  split_pattern = r'(.*)(/\*.*?@param.*?@param.*?\*/\w*\n\w*function\w*\(.*?^}\n?)(.*)'
+  parts = re.match(split_pattern, js, re.MULTILINE|re.DOTALL)
+  support_code = ''
+  if parts:
+    support_code = (parts.group(1) + parts.group(3)).strip()
+    if len(support_code):
+      js = parts.group(2)
+
   # Finally build the UDF object
-  udf = gcp.bigquery.UDF(inputs, outputs, variable_name, js, imports)
+  udf = gcp.bigquery.UDF(inputs, outputs, variable_name, js, support_code, imports)
   _notebook_environment()[variable_name] = udf
 
 
@@ -882,13 +893,15 @@ def _repr_html_function_evaluation(evaluation):
     <script>
       require(['extensions/bigquery', 'element!%s'],
           function(bq, dom) {
+              %s
               bq.evaluateUDF(dom, %s, %s);
           }
       );
     </script>
     """
   id = _html.Html.next_id()
-  return _HTML_TEMPLATE % (id, id, evaluation.implementation, json.dumps(evaluation.data))
+  return _HTML_TEMPLATE % (id, id, evaluation.support_code, evaluation.implementation,
+                           json.dumps(evaluation.data))
 
 
 def _register_html_formatters():
