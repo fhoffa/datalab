@@ -357,12 +357,12 @@ def _udf_cell(args, js):
 
   # Look for imports. We use a non-standard @import keyword; we could alternatively use @requires.
   # Object names can contain any characters except \r and \n.
-  import_pattern = r'@import[\w]+(gs://[a-z\d][a-z\d_\.\-]*[a-z\d]/[^\n\r]+)'
+  import_pattern = r'@import[\s]+(gs://[a-z\d][a-z\d_\.\-]*[a-z\d]/[^\n\r]+)'
   imports = re.findall(import_pattern, js)
 
   # Split the cell if necessary. We look for a 'function(' with no name and a header comment
-  # block with @param and assume this is the primary function. The remaining cell content is
-  # used as support code.
+  # block with @param and assume this is the primary function, up to a closing '}' at the start
+  # of the line. The remaining cell content is used as support code.
   split_pattern = r'(.*)(/\*.*?@param.*?@param.*?\*/\w*\n\w*function\w*\(.*?^}\n?)(.*)'
   parts = re.match(split_pattern, js, re.MULTILINE|re.DOTALL)
   support_code = ''
@@ -900,8 +900,9 @@ def _repr_html_function_evaluation(evaluation):
     </script>
     """
   id = _html.Html.next_id()
-  return _HTML_TEMPLATE % (id, id, evaluation.support_code, evaluation.implementation,
-                           json.dumps(evaluation.data))
+  udf = evaluation.udf
+  data = evaluation.data
+  return _HTML_TEMPLATE % (id, id, udf.expand_imported_code(), udf.implementation, json.dumps(data))
 
 
 def _register_html_formatters():

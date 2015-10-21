@@ -35,16 +35,6 @@ class FunctionCall(object):
     """ Gets the UDF for this call. """
     return self._udf
 
-  #@property
-  #def sql(self):
-  #  """Gets the underlying SQL representation of this UDF object."""
-  #  return self._sql
-
-  #@property
-  #def js(self):
-  #  """Gets the underlying JS representation of this UDF object."""
-  #  return self._repr_code_()
-
   def _repr_sql_(self):
     """Returns a SQL representation of the UDF object.
 
@@ -53,43 +43,21 @@ class FunctionCall(object):
     """
     return self._sql
 
-  # TODO(gram): see if we can get rid of this.
-  #def _repr_code_(self):
-  #  """Returns a JS representation of the UDF object.
-#
-#    Returns:
-#      A JS string that can be submitted with a BQ Query.
-#    """
-#    return self._udf._repr_code_()
-
 
 class FunctionEvaluation(object):
 
-  def __init__(self, implementation, data, support_code, imports):
-    # Add the contents of the imports to the implementation
-    self._support_code = support_code if support_code else ''
-    if imports:
-      for url in imports:
-        try:
-          content = gcp.storage.Item.from_url(url).read_from()
-          self._support_code += content
-        except Exception:
-          raise 'Could not read import %s' % url
-
-    self._implementation = implementation
+  def __init__(self, udf, data):
+    self._udf = udf
     self._data = data
+
+  @property
+  def udf(self):
+    """ Gets the UDF for this call. """
+    return self._udf
 
   @property
   def data(self):
     return self._data
-
-  @property
-  def implementation(self):
-    return self._implementation
-
-  @property
-  def support_code(self):
-    return self._support_code
 
 
 class UDF(object):
@@ -99,6 +67,14 @@ class UDF(object):
   @property
   def name(self):
     return self._name
+
+  @property
+  def implementation(self):
+    return self._implementation
+
+  @property
+  def imports(self):
+    return self._imports
 
   def __init__(self, inputs, outputs, name, implementation, support_code=None, imports=None):
     """Initializes a Function object from its pieces.
@@ -113,7 +89,6 @@ class UDF(object):
     Raises:
       Exception if the name is invalid.
       """
-    #self._inputs = inputs
     self._outputs = outputs
     self._name = name
     self._implementation = implementation
@@ -121,9 +96,22 @@ class UDF(object):
     self._imports = imports
     self._code = UDF._build_js(inputs, outputs, name, implementation, support_code)
 
+  def expand_imported_code(self):
+    """ For testing, we need to pull in any code from GCS imports. """
+    code = self._support_code if self._support_code else ''
+    if self._imports:
+      for url in self._imports:
+        try:
+          content = gcp.storage.Item.from_url(url).read_from()
+          code += '\n'
+          code += content
+        except Exception as e:
+          raise Exception('Could not read import %s' % url)
+    return code
+
   def __call__(self, data):
     if issubclass(type(data), list):
-      return FunctionEvaluation(self._implementation, data, self._support_code, self._imports)
+      return FunctionEvaluation(self, data)
     else:
       return FunctionCall(self, UDF._build_sql(self.name, self._outputs, data))
 

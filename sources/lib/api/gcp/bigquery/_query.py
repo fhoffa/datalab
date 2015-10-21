@@ -74,28 +74,37 @@ class Query(object):
     self._api = _api.Api(context)
     self._sql = sql
     self._results = None
-    self._scripts = None
+    self._code = None
+    self._imports = []
     if kwargs or udfs or values or not isinstance(sql, basestring):
       if values is None:
         values = kwargs
-      if udfs is None:
-        udfs = []
-      # Values dict can come from overrides in cell magic config bodies. If user
-      # specified UDFs there we need to add them to the UDF list.
-      udfs.extend([value for value in values.values() if isinstance(value, _udf.UDF)])
-      udfs.extend([value.udf for value in values.values() if isinstance(value, _udf.FunctionCall)])
+
       self._sql = gcp.data.SqlModule.expand(sql, values, udfs)
-      functions = re.findall(r'FROM\s+(\w+)\s*\(', self._sql, re.IGNORECASE)
-      for function in functions:
+      functions = set(re.findall(r'FROM\s+(\w+)\s*\(', self._sql, re.IGNORECASE))
+      if len(functions):
+        # Values dict can come from overrides in cell magic config bodies. If user
+        # specified UDFs there we need to add them to the UDF list. We also need to take
+        # care not to include the same code twice so we use sets.
+        udfs = set(udfs if udfs else [])
+        for value in values.values():
+          if isinstance(value, _udf.UDF):
+            udfs.add(value)
+          elif isinstance(value, _udf.FunctionCall):
+            udfs.add(value.udf)
+
         for udf in udfs:
-          if udf.name == function:
-            if self._scripts is None:
-              self._scripts = []
-            self._scripts.append(udf._repr_code_())
-            function = None
-            break
-        if function:
-          raise Exception('Invalid sql. Unknown function %s' % function)
+          if udf.name in functions:
+            if self._code is None:
+              self._code = []
+            self._code.append(udf._repr_code_())
+            if udf.imports:
+              self._imports.extend(udf.imports)
+
+            functions.remove(udf.name)
+
+        if len(functions):
+          raise Exception('Invalid sql. Unknown function(s) %s' % ', '.join(functions))
 
   def _repr_sql_(self):
     """Creates a SQL representation of this object.
@@ -129,7 +138,7 @@ class Query(object):
   @property
   def scripts(self):
     """ Get the code for any Javascript UDFs used in the query. """
-    return self._scripts
+    return self._code
 
   def results(self, use_cache=True):
     """Retrieves table of results for the query. May block if the query must be executed first.
@@ -277,7 +286,7 @@ class Query(object):
       An exception if the query was malformed.
     """
     try:
-      query_result = self._api.jobs_insert_query(self._sql, self._scripts, dry_run=True)
+      query_result = self._api.jobs_insert_query(self._sql, self._code, self._imports, dry_run=True)
     except Exception as e:
       raise e
     return query_result['statistics']['query']
@@ -311,7 +320,7 @@ class Query(object):
       table_name = _utils.parse_table_name(table_name, self._api.project_id)
 
     try:
-      query_result = self._api.jobs_insert_query(self._sql, self._scripts,
+      query_result = self._api.jobs_insert_query(self._sql, self._code, self._imports,
                                                  table_name=table_name,
                                                  append=append,
                                                  overwrite=overwrite,
